@@ -129,7 +129,7 @@ pub use crate::de::from_slice;
 
 #[cfg(feature = "std")]
 #[doc(inline)]
-pub use crate::de::from_reader;
+pub use crate::de::{from_reader, from_reader_with_option};
 
 #[doc(inline)]
 pub use crate::ser::to_vec;

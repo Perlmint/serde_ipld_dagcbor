@@ -16,6 +16,21 @@ use crate::CBOR_TAGS_CID;
 #[cfg(feature = "std")]
 use cbor4ii::core::utils::IoReader;
 
+/// Deserializer option
+#[derive(Debug)]
+pub struct DeserializeOption {
+    /// Do not throw TrailingData error
+    pub ignore_trailing: bool,
+}
+
+impl Default for DeserializeOption {
+    fn default() -> Self {
+        Self {
+            ignore_trailing: false,
+        }
+    }
+}
+
 /// Decodes a value from CBOR data in a slice.
 ///
 /// # Examples
@@ -75,8 +90,19 @@ where
     T: de::DeserializeOwned,
     R: std::io::BufRead,
 {
+    from_reader_with_option(reader, DeserializeOption::default())
+}
+
+/// Decodes a value from CBOR data in a reader with custom option.
+/// See details for `from_reader`
+#[cfg(feature = "std")]
+pub fn from_reader_with_option<T, R>(reader: R, option: DeserializeOption) -> Result<T, DecodeError<std::io::Error>>
+where
+    T: de::DeserializeOwned,
+    R: std::io::BufRead,
+{
     let reader = IoReader::new(reader);
-    let mut deserializer = Deserializer::from_reader(reader);
+    let mut deserializer = Deserializer::from_reader_with_option(reader, option);
     let value = serde::Deserialize::deserialize(&mut deserializer)?;
     deserializer.end()?;
     Ok(value)
@@ -86,12 +112,17 @@ where
 #[derive(Debug)]
 struct Deserializer<R> {
     reader: R,
+    option: DeserializeOption,
 }
 
 impl<R> Deserializer<R> {
     /// Constructs a `Deserializer` which reads from a `Read`er.
     pub fn from_reader(reader: R) -> Deserializer<R> {
-        Deserializer { reader }
+        Deserializer { reader, option: DeserializeOption::default() }
+    }
+
+    pub fn from_reader_with_option(reader: R, option: DeserializeOption) -> Deserializer<R> {
+        Deserializer { reader, option }
     }
 }
 
@@ -129,7 +160,11 @@ impl<'de, R: dec::Read<'de>> Deserializer<R> {
     /// trailing data in the input source.
     pub fn end(&mut self) -> Result<(), DecodeError<R::Error>> {
         match peek_one(&mut self.reader) {
-            Ok(_) => Err(DecodeError::TrailingData),
+            Ok(_) => if self.option.ignore_trailing {
+                Ok(())
+            } else {
+                Err(DecodeError::TrailingData)
+            },
             Err(DecodeError::Eof) => Ok(()),
             Err(error) => Err(error),
         }
